@@ -1,26 +1,23 @@
 const { Telegraf, Markup } = require('telegraf');
 const axios = require('axios');
 
-// 🔑 👉 YAHAN TOKEN PASTE KAR
+// 🔑 TOKEN YAHAN PASTE KAR
 const bot = new Telegraf("8788084813:AAFGmu-TTusoP4vBf0JGhAtM5nfVJJuihOo");
 
-// ------------------ START UI ------------------ //
+// ------------------ UI ------------------ //
 bot.start((ctx) => {
     ctx.reply(
 `🔐 *VPN Config Parser*
 
-Send me any VPN config file and I'll extract the connection details.
+Send any VPN config file and I'll extract everything 💀
 
-✅ Supported outputs:
+✅ Outputs:
 vless:// • vmess:// • trojan:// • ssh://
 
-📦 Supported input formats:
-• V2Ray / Xray
-• HTTP Custom
-• Dark Tunnel
-• AuraNet / HA Tunnel / SlowDNS
+📦 Supports:
+Dark Tunnel • HTTP Custom • HTTP Injector • NetMod • V2Ray • SlowDNS
 
-Tap Help below 👇`,
+👇 Tap below`,
         {
             parse_mode: "Markdown",
             ...Markup.inlineKeyboard([
@@ -31,42 +28,47 @@ Tap Help below 👇`,
     );
 });
 
-// ------------------ BUTTONS ------------------ //
+// Buttons
 bot.action("help", (ctx) => {
-    ctx.editMessageText(
-`📖 *Help*
-
-बस file send karo 📁  
-Bot automatically detect karke extract karega.
-
-Supported:
-• .json • .txt • .conf • any VPN file
-
-No rename needed 😎`,
-        { parse_mode: "Markdown" }
-    );
+    ctx.editMessageText("📖 Send any VPN file (.txt/.json/.conf). Auto decode hoga 😎", { parse_mode: "Markdown" });
 });
 
 bot.action("about", (ctx) => {
-    ctx.editMessageText(
-`ℹ️ *About*
-
-This bot extracts configs:
-VLESS / VMESS / Trojan / SSH
-
-⚡ Fast • Clean • Accurate`,
-        { parse_mode: "Markdown" }
-    );
+    ctx.editMessageText("⚡ Advanced VPN Config Extractor Bot", { parse_mode: "Markdown" });
 });
 
 bot.action("credits", (ctx) => {
-    ctx.editMessageText(
-`☠︎ *Credits*
-
-𝑺𝒌 ꭗ 𓆩𝐌.𝐒.𝐃𓆪 & ☠︎𝙑𝙞𝙧𝙖𝙩𓆪 𓆩𖤍𓆪`,
-        { parse_mode: "Markdown" }
-    );
+    ctx.editMessageText("☠︎ 𝑺𝒌 ꭗ 𓆩𝐌.𝐒.𝐃𓆪 & ☠︎𝙑𝙞𝙧𝙖𝙩𓆪 𓆩𖤍𓆪", { parse_mode: "Markdown" });
 });
+
+// ------------------ CORE PARSER ------------------ //
+function extractConfigs(text) {
+    const regex = /(vless:\/\/|vmess:\/\/|trojan:\/\/|ssh:\/\/)[^\s'"]+/g;
+    return text.match(regex);
+}
+
+// 🔥 Multi decode function
+function multiDecode(text) {
+    let results = [text];
+
+    // Base64 decode try
+    try {
+        let decoded = Buffer.from(text, 'base64').toString('utf-8');
+        if (decoded.includes("vless://") || decoded.includes("vmess://")) {
+            results.push(decoded);
+        }
+    } catch {}
+
+    // Double base64
+    try {
+        let decoded2 = Buffer.from(results[results.length - 1], 'base64').toString('utf-8');
+        if (decoded2.includes("vless://") || decoded2.includes("vmess://")) {
+            results.push(decoded2);
+        }
+    } catch {}
+
+    return results;
+}
 
 // ------------------ FILE HANDLER ------------------ //
 bot.on('document', async (ctx) => {
@@ -75,75 +77,78 @@ bot.on('document', async (ctx) => {
         const fileLink = await ctx.telegram.getFileLink(file.file_id);
 
         const res = await axios.get(fileLink.href);
-        const content = res.data.toString();
+        let content = res.data.toString();
 
-        const regexes = {
-            VLESS: /vless:\/\/[^\s'"]+/g,
-            VMESS: /vmess:\/\/[^\s'"]+/g,
-            TROJAN: /trojan:\/\/[^\s'"]+/g,
-            SSH: /ssh:\/\/[^\s'"]+/g
-        };
+        let decodedLayers = multiDecode(content);
 
-        let text = "✅ *Extracted Config:*\n━━━━━━━━━━━━━━━━━━━━\n\n";
-        let found = false;
+        let configs = [];
 
-        for (let type in regexes) {
-            const matches = content.match(regexes[type]);
-            if (matches) {
-                found = true;
-
-                for (let url of matches) {
-                    text += `⚠️ *${type}*\n\n`;
-
-                    try {
-                        if (type === "VLESS" || type === "TROJAN" || type === "SSH") {
-                            const u = new URL(url);
-                            const params = new URLSearchParams(u.search);
-
-                            text += 
-`• Address: ${u.hostname}
-• Port: ${u.port}
-• UUID: ${u.username}
-• Network: ${params.get("type") || "unknown"}
-• Security: ${params.get("security") || "none"}
-• Host: ${params.get("host") || "none"}
-• Path: ${decodeURIComponent(params.get("path") || "/")}
-• Allow Insecure: ${params.get("allowInsecure") == "1" ? "true" : "false"}
-
-🔗 Open Config URL:
-\`${url}\`
-
-`;
-                        }
-
-                        else if (type === "VMESS") {
-                            const decoded = JSON.parse(
-                                Buffer.from(url.replace("vmess://",""), 'base64').toString()
-                            );
-
-                            text += 
-`• Address: ${decoded.add}
-• Port: ${decoded.port}
-• ID: ${decoded.id}
-• Network: ${decoded.net}
-• Type: ${decoded.type}
-• Host: ${decoded.host}
-• Path: ${decoded.path}
-
-🔗 Open Config URL:
-\`${url}\`
-
-`;
-                        }
-
-                    } catch {
-                        text += "⚠️ Parse error\n\n";
-                    }
-                }
-            }
+        for (let layer of decodedLayers) {
+            let found = extractConfigs(layer);
+            if (found) configs.push(...found);
         }
 
-        if (!found) text = "❌ No valid config found.";
+        if (configs.length === 0) {
+            return ctx.reply("❌ No valid config found (even after deep scan).");
+        }
+
+        let text = "✅ *Extracted Config:*\n━━━━━━━━━━━━━━━━━━━━\n\n";
+
+        for (let url of configs) {
+
+            if (url.startsWith("vless://")) {
+                try {
+                    const u = new URL(url);
+                    const p = new URLSearchParams(u.search);
+
+                    text += 
+`⚠️ *VLESS*
+
+• Address: ${u.hostname}
+• Port: ${u.port}
+• UUID: ${u.username}
+• Network: ${p.get("type") || "unknown"}
+• Security: ${p.get("security") || "none"}
+• Host: ${p.get("host") || "none"}
+• Path: ${decodeURIComponent(p.get("path") || "/")}
+
+🔗 Open Config URL:
+\`${url}\`
+
+`;
+                } catch {
+                    text += "⚠️ VLESS parse error\n\n";
+                }
+            }
+
+            else if (url.startsWith("vmess://")) {
+                try {
+                    const d = JSON.parse(Buffer.from(url.replace("vmess://",""), 'base64').toString());
+
+                    text += 
+`⚠️ *VMESS*
+
+• Address: ${d.add}
+• Port: ${d.port}
+• ID: ${d.id}
+• Network: ${d.net}
+• Type: ${d.type}
+• Host: ${d.host}
+• Path: ${d.path}
+
+🔗 Open Config URL:
+\`${url}\`
+
+`;
+                } catch {
+                    text += "⚠️ VMESS parse error\n\n";
+                }
+            }
+
+            else {
+                text += `⚠️ *OTHER*\n\`${url}\`\n\n`;
+            }
+        }
 
         ctx.reply(text, { parse_mode: "Markdown" });
 
@@ -153,6 +158,6 @@ bot.on('document', async (ctx) => {
     }
 });
 
-// ------------------ RUN BOT ------------------ //
+// ------------------ RUN ------------------ //
 bot.launch();
-console.log("🚀 PRO Bot Running..."); 
+console.log("💀 Ultimate Parser Bot Running...");
