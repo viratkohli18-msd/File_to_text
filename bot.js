@@ -124,7 +124,79 @@ ${links.join("\n\n")}
         ctx.reply("❌ Error processing file");
     }
 });
+// 🔥 VLESS / VMESS CLEAN FORMAT EXTRACT
 
+const extractClean = (url) => {
+    try {
+        const u = new URL(url);
+        const p = new URLSearchParams(u.search);
+
+        return {
+            address: u.hostname,
+            port: parseInt(u.port),
+            id: u.username,
+            network: p.get("type") || "ws",
+            security: p.get("security") || "none",
+            host: p.get("host") || "",
+            path: decodeURIComponent(p.get("path") || "/")
+        };
+    } catch {
+        return null;
+    }
+};
+
+// 🔥 FIND VLESS LINKS
+const vlessLinks = content.match(/vless:\/\/[^\s'"]+/g);
+
+if (vlessLinks) {
+    let result = "";
+
+    for (let link of vlessLinks) {
+        const data = extractClean(link);
+        if (!data) continue;
+
+        result += 
+`{
+  "address": "${data.address}",
+  "port": ${data.port},
+  "users": [
+    {
+      "encryption": "none",
+      "id": "${data.id}",
+      "level": 8
+    }
+  ],
+  "streamSettings": {
+    "network": "${data.network}",
+    "security": "${data.security}",
+    "wsSettings": {
+      "headers": {
+        "Host": "${data.host}"
+      },
+      "path": "${data.path}"
+    }
+  },
+  "tag": "VLESS"
+}
+
+`;
+    }
+
+    if (result) {
+        return ctx.reply(
+`✅ VLESS Extract:
+━━━━━━━━━━━━━━━━━━━━
+
+\`\`\`json
+${result}
+\`\`\`
+
+━━━━━━━━━━━━━━━━━━━━
+👑 𝑺𝒌 ꭗ 𓆩𝐌.𝐒.𝐃𓆪 & ☠︎𝙑𝙞𝙧𝙖𝙩𓆪 𓆩𖤍𓆪`,
+            { parse_mode: "Markdown" }
+        );
+    }
+}
 // 🚀 RUN
 bot.launch();
 console.log("Bot running...");
