@@ -1,21 +1,27 @@
 const { Telegraf, Markup } = require("telegraf");
 const axios = require("axios");
+const express = require("express");
 
 // 🔑 TOKEN YAHAN DAL
 const BOT_TOKEN = "8788084813:AAFGmu-TTusoP4vBf0JGhAtM5nfVJJuihOo";
 
 const bot = new Telegraf(BOT_TOKEN);
 
+// 🌐 EXPRESS (Render fix)
+const app = express();
+app.get("/", (req, res) => res.send("Bot Running ✅"));
+app.listen(process.env.PORT || 3000);
+
 // 🚀 START
 bot.start((ctx) => {
     ctx.reply(
-`🔐 VPN Config Parser (PRO)
+`🔐 VPN Config Parser PRO
 
-Send any config file (.txt / .json)
+Send any config file (.txt)
 
 Supports:
-• Dark Tunnel / HTTP Custom / HTTP Injector / NetMod
-• VLESS • VMESS • TROJAN • SSH`,
+• Dark Tunnel / HC / EHI
+• VLESS / VMESS / TROJAN`,
         Markup.inlineKeyboard([
             [Markup.button.callback("📖 Help", "help")]
         ])
@@ -25,7 +31,7 @@ Supports:
 // 📖 HELP
 bot.action("help", (ctx) => {
     ctx.answerCbQuery();
-    ctx.reply("बस file bhej — bot khud detect karega 😎");
+    ctx.reply("Bas file bhej — bot auto extract karega 😎");
 });
 
 // 📂 FILE HANDLER
@@ -37,14 +43,14 @@ bot.on("document", async (ctx) => {
 
         let content = res.data.toString();
 
-        // 🔥 STEP 1: JSON FORCE PARSE
+        // 🔥 JSON PARSE TRY
         let json = null;
         try {
             json = JSON.parse(content);
         } catch {
-            const match = content.match(/{[\s\S]*}/);
-            if (match) {
-                try { json = JSON.parse(match[0]); } catch {}
+            const m = content.match(/{[\s\S]*}/);
+            if (m) {
+                try { json = JSON.parse(m[0]); } catch {}
             }
         }
 
@@ -59,7 +65,7 @@ bot.on("document", async (ctx) => {
             return null;
         };
 
-        // 🔥 LOCKED CONFIG EXTRACT
+        // 🔥 LOCKED CONFIG (Dark / HC / EHI)
         if (json) {
             const ssh = find(json, "SshConfig") || find(json, "sshConfig");
             const inject = find(json, "InjectConfig") || find(json, "injectConfig");
@@ -72,9 +78,7 @@ bot.on("document", async (ctx) => {
 
                 let payload = find(inject, "Payload") || find(inject, "EncryptedPayload") || "N/A";
 
-                payload = payload
-                    .replace(/\[crlf\]/g, "\n")
-                    .replace(/\[lf\]/g, "\n");
+                payload = payload.replace(/\[crlf\]/g, "\n").replace(/\[lf\]/g, "\n");
 
                 return ctx.reply(
 `⚠️ SSH (LOCKED CONFIG)
@@ -95,20 +99,118 @@ ${payload}
             }
         }
 
-        // 🔥 STEP 2: LINK EXTRACT
-        const regex = /(vless:\/\/|vmess:\/\/|trojan:\/\/|ssh:\/\/)[^\s'"]+/g;
-        const links = content.match(regex);
+        // 🔥 BASE64 DECODE TRY
+        try {
+            const decoded = Buffer.from(content.trim(), "base64").toString("utf-8");
+            if (decoded.includes("vmess://") || decoded.includes("vless://")) {
+                content = decoded;
+            }
+        } catch {}
 
-        if (links) {
-            return ctx.reply(
-`✅ Extracted Config:
+        // 🔥 VLESS PARSER
+        const vlessLinks = content.match(/vless:\/\/[^\s'"]+/g);
+
+        if (vlessLinks) {
+            let result = "";
+
+            for (let link of vlessLinks) {
+                try {
+                    const u = new URL(link);
+                    const p = new URLSearchParams(u.search);
+
+                    result += 
+`{
+  "address": "${u.hostname}",
+  "port": ${u.port},
+  "users": [
+    {
+      "encryption": "none",
+      "id": "${u.username}",
+      "level": 8
+    }
+  ],
+  "streamSettings": {
+    "network": "${p.get("type") || "ws"}",
+    "security": "${p.get("security") || "none"}",
+    "wsSettings": {
+      "headers": {
+        "Host": "${p.get("host") || ""}"
+      },
+      "path": "${decodeURIComponent(p.get("path") || "/")}"
+    }
+  },
+  "tag": "VLESS"
+}
+
+`;
+                } catch {}
+            }
+
+            if (result) {
+                return ctx.reply(
+`✅ VLESS Extract:
 ━━━━━━━━━━━━━━━━━━━━
-
-${links.join("\n\n")}
-
+\`\`\`json
+${result}
+\`\`\`
 ━━━━━━━━━━━━━━━━━━━━
-👑 𝑺𝒌 ꭗ 𓆩𝐌.𝐒.𝐃𓆪 & ☠︎𝙑𝙞𝙧𝙖𝙩𓆪 𓆩𖤍𓆪`
-            );
+👑 𝑺𝒌 ꭗ 𓆩𝐌.𝐒.𝐃𓆪 & ☠︎𝙑𝙞𝙧𝙖𝙩𓆪 𓆩𖤍𓆪`,
+                    { parse_mode: "Markdown" }
+                );
+            }
+        }
+
+        // 🔥 VMESS PARSER
+        const vmessLinks = content.match(/vmess:\/\/[^\s'"]+/g);
+
+        if (vmessLinks) {
+            let result = "";
+
+            for (let link of vmessLinks) {
+                try {
+                    const base64 = link.replace("vmess://", "");
+                    const j = JSON.parse(Buffer.from(base64, "base64").toString());
+
+                    result += 
+`{
+  "address": "${j.add}",
+  "port": ${j.port},
+  "users": [
+    {
+      "encryption": "auto",
+      "id": "${j.id}",
+      "level": 8
+    }
+  ],
+  "streamSettings": {
+    "network": "${j.net}",
+    "security": "${j.tls || "none"}",
+    "wsSettings": {
+      "headers": {
+        "Host": "${j.host || ""}"
+      },
+      "path": "${j.path || "/"}"
+    }
+  },
+  "tag": "VMESS"
+}
+
+`;
+                } catch {}
+            }
+
+            if (result) {
+                return ctx.reply(
+`✅ VMESS Extract:
+━━━━━━━━━━━━━━━━━━━━
+\`\`\`json
+${result}
+\`\`\`
+━━━━━━━━━━━━━━━━━━━━
+👑 𝑺𝒌 ꭗ 𓆩𝐌.𝐒.𝐃𓆪 & ☠︎𝙑𝙞𝙧𝙖𝙩𓆪 𓆩𖤍𓆪`,
+                    { parse_mode: "Markdown" }
+                );
+            }
         }
 
         // ❌ FINAL
@@ -124,90 +226,7 @@ ${links.join("\n\n")}
         ctx.reply("❌ Error processing file");
     }
 });
-// 🔥 VLESS / VMESS CLEAN FORMAT EXTRACT
 
-const extractClean = (url) => {
-    try {
-        const u = new URL(url);
-        const p = new URLSearchParams(u.search);
-
-        return {
-            address: u.hostname,
-            port: parseInt(u.port),
-            id: u.username,
-            network: p.get("type") || "ws",
-            security: p.get("security") || "none",
-            host: p.get("host") || "",
-            path: decodeURIComponent(p.get("path") || "/")
-        };
-    } catch {
-        return null;
-    }
-};
-
-// 🔥 FIND VLESS LINKS
-const vlessLinks = content.match(/vless:\/\/[^\s'"]+/g);
-
-if (vlessLinks) {
-    let result = "";
-
-    for (let link of vlessLinks) {
-        const data = extractClean(link);
-        if (!data) continue;
-
-        result += 
-`{
-  "address": "${data.address}",
-  "port": ${data.port},
-  "users": [
-    {
-      "encryption": "none",
-      "id": "${data.id}",
-      "level": 8
-    }
-  ],
-  "streamSettings": {
-    "network": "${data.network}",
-    "security": "${data.security}",
-    "wsSettings": {
-      "headers": {
-        "Host": "${data.host}"
-      },
-      "path": "${data.path}"
-    }
-  },
-  "tag": "VLESS"
-}
-
-`;
-    }
-
-    if (result) {
-        return ctx.reply(
-`✅ VLESS Extract:
-━━━━━━━━━━━━━━━━━━━━
-
-\`\`\`json
-${result}
-\`\`\`
-
-━━━━━━━━━━━━━━━━━━━━
-👑 𝑺𝒌 ꭗ 𓆩𝐌.𝐒.𝐃𓆪 & ☠︎𝙑𝙞𝙧𝙖𝙩𓆪 𓆩𖤍𓆪`,
-            { parse_mode: "Markdown" }
-        );
-    }
-}
 // 🚀 RUN
 bot.launch();
 console.log("Bot running...");
-const express = require("express");
-const app = express();
-
-app.get("/", (req, res) => {
-    res.send("Bot is running ✅");
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log("🌐 Server running on port " + PORT);
-});
