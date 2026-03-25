@@ -1,138 +1,130 @@
 const { Telegraf, Markup } = require("telegraf");
 const axios = require("axios");
 
-// ⚠️ YAHI TOKEN DALNA
+// 🔑 TOKEN YAHAN DAL
 const BOT_TOKEN = "8788084813:AAFGmu-TTusoP4vBf0JGhAtM5nfVJJuihOo";
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// 🚀 START COMMAND
+// 🚀 START
 bot.start((ctx) => {
     ctx.reply(
-`🔐 *VPN Config Parser (PRO)*
+`🔐 VPN Config Parser (PRO)
 
-Send me any VPN config file and I'll extract details.
+Send any config file (.txt / .json)
 
-✅ Supported:
-• VLESS • VMESS • TROJAN • SSH
-• Dark Tunnel • HTTP Custom • HTTP Injector • NetMod
-
-Tap below 👇`,
-        {
-            parse_mode: "Markdown",
-            ...Markup.inlineKeyboard([
-                [Markup.button.callback("📖 Help", "help")],
-                [Markup.button.url("👑 Owner", "https://t.me/yourusername")]
-            ])
-        }
+Supports:
+• Dark Tunnel / HTTP Custom / HTTP Injector / NetMod
+• VLESS • VMESS • TROJAN • SSH`,
+        Markup.inlineKeyboard([
+            [Markup.button.callback("📖 Help", "help")]
+        ])
     );
 });
 
 // 📖 HELP
 bot.action("help", (ctx) => {
     ctx.answerCbQuery();
-    ctx.reply(
-`📦 *How to use:*
-
-1. Send config file  
-2. Bot auto detect karega  
-3. Output mil jayega  
-
-⚠️ Encrypted config full decode nahi hota`,
-        { parse_mode: "Markdown" }
-    );
+    ctx.reply("बस file bhej — bot khud detect karega 😎");
 });
 
 // 📂 FILE HANDLER
-bot.on('document', async (ctx) => {
+bot.on("document", async (ctx) => {
     try {
         const file = ctx.message.document;
-        const fileLink = await ctx.telegram.getFileLink(file.file_id);
-        const res = await axios.get(fileLink.href);
+        const link = await ctx.telegram.getFileLink(file.file_id);
+        const res = await axios.get(link.href);
 
         let content = res.data.toString();
-        let text = "";
 
+        // 🔥 STEP 1: JSON FORCE PARSE
         let json = null;
-        try { json = JSON.parse(content); } catch {}
+        try {
+            json = JSON.parse(content);
+        } catch {
+            const match = content.match(/{[\s\S]*}/);
+            if (match) {
+                try { json = JSON.parse(match[0]); } catch {}
+            }
+        }
 
-        const findKey = (obj, key) => {
+        // 🔎 DEEP SEARCH
+        const find = (obj, key) => {
             if (!obj || typeof obj !== "object") return null;
             if (obj[key]) return obj[key];
             for (let k in obj) {
-                const found = findKey(obj[k], key);
-                if (found) return found;
+                const f = find(obj[k], key);
+                if (f) return f;
             }
             return null;
         };
 
-        // 🔥 LOCKED CONFIG
+        // 🔥 LOCKED CONFIG EXTRACT
         if (json) {
-            const ssh = findKey(json, "SshConfig") || findKey(json, "sshConfig");
-            const inject = findKey(json, "InjectConfig") || findKey(json, "injectConfig");
+            const ssh = find(json, "SshConfig") || find(json, "sshConfig");
+            const inject = find(json, "InjectConfig") || find(json, "injectConfig");
 
             if (ssh) {
-                const host = findKey(ssh, "Host") || findKey(ssh, "EncryptedHost");
-                const port = findKey(ssh, "Port") || findKey(ssh, "EncryptedPort");
-                const user = findKey(ssh, "Username") || findKey(ssh, "EncryptedUsername");
-                const pass = findKey(ssh, "Password") || findKey(ssh, "EncryptedPassword");
+                const host = find(ssh, "Host") || find(ssh, "EncryptedHost");
+                const port = find(ssh, "Port") || find(ssh, "EncryptedPort");
+                const user = find(ssh, "Username") || find(ssh, "EncryptedUsername");
+                const pass = find(ssh, "Password") || find(ssh, "EncryptedPassword");
 
-                let payload = findKey(inject, "Payload") || findKey(inject, "EncryptedPayload") || "N/A";
+                let payload = find(inject, "Payload") || find(inject, "EncryptedPayload") || "N/A";
 
                 payload = payload
                     .replace(/\[crlf\]/g, "\n")
                     .replace(/\[lf\]/g, "\n");
 
-                text =
-`⚠️ *SSH (LOCKED CONFIG)*
+                return ctx.reply(
+`⚠️ SSH (LOCKED CONFIG)
 
-• Address: ${host || "N/A"}
+• Host: ${host || "N/A"}
 • Port: ${port || "N/A"}
 • Username: ${user || "N/A"}
 • Password: ${pass || "N/A"}
 
-⚠️ *Payload:*
+⚠️ Payload:
 ${payload}
 
-🔒 *Note:* Fully encrypted config
+🔒 Note: Fully encrypted config
 
 ━━━━━━━━━━━━━━━━━━━━
-👑 𝑺𝒌 ꭗ 𓆩𝐌.𝐒.𝐃𓆪 & ☠︎𝙑𝙞𝙧𝙖𝙩𓆪 𓆩𖤍𓆪`;
-
-                return ctx.reply(text, { parse_mode: "Markdown" });
+👑 𝑺𝒌 ꭗ 𓆩𝐌.𝐒.𝐃𓆪 & ☠︎𝙑𝙞𝙧𝙖𝙩𓆪 𓆩𖤍𓆪`
+                );
             }
         }
 
-        // 🔥 NORMAL CONFIG
+        // 🔥 STEP 2: LINK EXTRACT
         const regex = /(vless:\/\/|vmess:\/\/|trojan:\/\/|ssh:\/\/)[^\s'"]+/g;
-        const match = content.match(regex);
+        const links = content.match(regex);
 
-        if (match) {
+        if (links) {
             return ctx.reply(
-`✅ *Extracted Config:*
+`✅ Extracted Config:
 ━━━━━━━━━━━━━━━━━━━━
 
-\`${match.join("\n\n")}\`
+${links.join("\n\n")}
 
 ━━━━━━━━━━━━━━━━━━━━
-👑 𝑺𝒌 ꭗ 𓆩𝐌.𝐒.𝐃𓆪 & ☠︎𝙑𝙞𝙧𝙖𝙩𓆪 𓆩𖤍𓆪`,
-                { parse_mode: "Markdown" }
+👑 𝑺𝒌 ꭗ 𓆩𝐌.𝐒.𝐃𓆪 & ☠︎𝙑𝙞𝙧𝙖𝙩𓆪 𓆩𖤍𓆪`
             );
         }
 
+        // ❌ FINAL
         ctx.reply(
-`❌ No valid config found.
+`❌ No valid config found
 
 ━━━━━━━━━━━━━━━━━━━━
 👑 𝑺𝒌 ꭗ 𓆩𝐌.𝐒.𝐃𓆪 & ☠︎𝙑𝙞𝙧𝙖𝙩𓆪 𓆩𖤍𓆪`
         );
 
-    } catch (err) {
-        console.log(err);
-        ctx.reply("❌ Error processing file.");
+    } catch (e) {
+        console.log(e);
+        ctx.reply("❌ Error processing file");
     }
 });
 
 // 🚀 RUN
 bot.launch();
-console.log("🤖 Bot Running...");
+console.log("Bot running...");
